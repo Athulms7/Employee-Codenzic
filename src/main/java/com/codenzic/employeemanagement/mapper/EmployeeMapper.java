@@ -5,6 +5,8 @@ import com.codenzic.employeemanagement.dto.EmployeeResponse;
 import com.codenzic.employeemanagement.entity.Employee;
 import org.springframework.stereotype.Component;
 
+import java.util.Locale;
+
 @Component
 public class EmployeeMapper {
     public Employee toEntity(EmployeeRequest request) {
@@ -16,7 +18,7 @@ public class EmployeeMapper {
     public void updateEntity(Employee employee, EmployeeRequest request) {
         employee.setFirstName(request.firstName().trim());
         employee.setLastName(request.lastName().trim());
-        employee.setEmail(request.email().trim().toLowerCase());
+        employee.setEmail(request.email().trim().toLowerCase(Locale.ROOT));
         employee.setDepartment(request.department().trim());
         employee.setJobTitle(request.jobTitle().trim());
         employee.setSalary(request.salary());

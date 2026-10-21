@@ -5,17 +5,29 @@ import com.codenzic.employeemanagement.dto.EmployeeResponse;
 import com.codenzic.employeemanagement.entity.Employee;
 import com.codenzic.employeemanagement.entity.EmployeeStatus;
 import com.codenzic.employeemanagement.exception.DuplicateEmailException;
+import com.codenzic.employeemanagement.exception.InvalidRequestException;
 import com.codenzic.employeemanagement.exception.ResourceNotFoundException;
 import com.codenzic.employeemanagement.mapper.EmployeeMapper;
 import com.codenzic.employeemanagement.repository.EmployeeRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @Transactional
 public class EmployeeService {
+    private static final int MAX_PAGE_SIZE = 100;
+    private static final List<String> SORTABLE_FIELDS = List.of(
+            "id", "firstName", "lastName", "email", "department", "jobTitle",
+            "salary", "status", "createdAt", "updatedAt");
+
     private final EmployeeRepository repository;
     private final EmployeeMapper mapper;
 
@@ -31,8 +43,24 @@ public class EmployeeService {
 
     @Transactional(readOnly = true)
     public Page<EmployeeResponse> findAll(String search, EmployeeStatus status, Pageable pageable) {
+        validatePageable(pageable);
         String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
         return repository.search(normalizedSearch, status, pageable).map(mapper::toResponse);
+    }
+
+    private void validatePageable(Pageable pageable) {
+        if (pageable.getPageSize() > MAX_PAGE_SIZE) {
+            throw new InvalidRequestException("Page size must not exceed " + MAX_PAGE_SIZE);
+        }
+
+        Set<String> unsupportedFields = pageable.getSort().stream()
+                .map(Sort.Order::getProperty)
+                .filter(property -> !SORTABLE_FIELDS.contains(property))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (!unsupportedFields.isEmpty()) {
+            throw new InvalidRequestException("Unsupported sort field(s): " + String.join(", ", unsupportedFields)
+                    + ". Allowed fields: " + String.join(", ", SORTABLE_FIELDS));
+        }
     }
 
     @Transactional(readOnly = true)

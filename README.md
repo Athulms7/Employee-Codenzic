@@ -185,11 +185,24 @@ Errors share a stable shape. Validation errors include a `validationErrors` obje
 }
 ```
 
-HTTP status mapping: `400` invalid input, `404` employee not found, `409` duplicate email/data conflict, `500` unexpected server error.
+HTTP status mapping: `400` invalid input, `404` employee not found, `409` duplicate email/data conflict, `503` database unavailable, `500` unexpected server error. Internal exception details are written to the application log; they are not returned to API clients.
 
 ## Postman
 
 Import `postman/Employee Management API.postman_collection.json` into Postman. The collection uses `baseUrl` (`http://localhost:8080`) and automatically saves the created employee ID as `employeeId` for the follow-up requests.
+
+## Architecture and design notes
+
+- **Controller:** owns HTTP routes, request binding, validation, and response status codes. It delegates business work instead of accessing repositories directly.
+- **Service:** owns employee use cases and transaction boundaries. It normalizes search input, checks duplicate email addresses, validates supported sort fields, and enforces a maximum page size of 100.
+- **Repository:** uses Spring Data JPA for persistence. The search query combines optional status and case-insensitive substring filters, and PostgreSQL performs the paging and sorting.
+- **DTOs and mapper:** keep the API contract separate from the JPA entity. Request validation runs at the HTTP boundary; the mapper trims values and stores emails in canonical lowercase form.
+- **Entity:** maps employee fields and database constraints. Lifecycle callbacks set timestamps, while enum values are stored as strings so database rows remain readable.
+- **Exception advice:** maps expected failures to consistent 400, 404, and 409 responses. Unexpected failures are logged with the request method and path while the response avoids exposing internal details.
+
+For a walkthrough, trace `POST /api/v1/employees` from `EmployeeController` to `EmployeeService`, `EmployeeMapper`, and `EmployeeRepository`. The same layering applies to reads and updates. `Pageable` carries page, size, and sort into the repository, so the application does not load the full employee table into memory.
+
+For list requests, Swagger exposes `page`, `size`, and `sort` query parameters. Use values such as `page=0`, `size=20`, and `sort=lastName,asc`. Sortable fields are listed in the endpoint description; unsupported fields and page sizes above 100 return `400 Bad Request`.
 
 ## Project layout
 
