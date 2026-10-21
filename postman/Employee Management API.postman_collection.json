@@ -11,6 +11,10 @@
   ],
   "item": [
     {
+      "name": "Health check",
+      "request": { "method": "GET", "url": "{{baseUrl}}/health" }
+    },
+    {
       "name": "Create employee",
       "event": [{
         "listen": "test",
@@ -31,6 +35,10 @@
     {
       "name": "List employees",
       "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/employees?page=0&size=20&sort=lastName,asc" }
+    },
+    {
+      "name": "List second page",
+      "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/employees?page=1&size=5&sort=lastName,desc" }
     },
     {
       "name": "Search active employees",

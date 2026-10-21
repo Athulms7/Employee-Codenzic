@@ -1,11 +1,11 @@
 # Employee Management REST API
 
-A small, layered Spring Boot API for the Codenzic Innovations Java assessment. It uses Java 21, Spring Boot 3.5, Maven, PostgreSQL, Bean Validation, Spring Data JPA, and OpenAPI.
+A small, layered Spring Boot API for the Codenzic Innovations Java assessment. It uses Java 25, Spring Boot 3.5, Maven, PostgreSQL, Bean Validation, Spring Data JPA, and OpenAPI.
 
 ## Requirements
 
-- JDK 21 (verify with `java -version`)
-- Maven 3.6.3 or newer (verify with `mvn -version`)
+- JDK 25 (verify with `java -version`)
+- Maven 3.9 or newer (verify with `mvn -version`)
 - PostgreSQL 14 or newer, or Docker Desktop with Compose
 - IntelliJ IDEA or Visual Studio Code with Java support (optional)
 
@@ -18,7 +18,7 @@ A small, layered Spring Boot API for the Codenzic Innovations Java assessment. I
    cd employee-management-api
    ```
 
-2. Start PostgreSQL. This creates a local database `employee_management` with user/password `postgres`/`postgres` on port `5432`:
+2. Start PostgreSQL. This creates a local database `employee_management` with user/password `postgres`/`postgres` on host port `5433` (PostgreSQL listens on `5432` inside the container):
 
    ```shell
    docker compose up -d
@@ -42,6 +42,8 @@ A small, layered Spring Boot API for the Codenzic Innovations Java assessment. I
 
 The application listens on port `8080`. Hibernate creates/updates the `employees` table on startup. No seed data is inserted; create an employee with Swagger UI or Postman.
 
+Check that the application is responding with `GET http://localhost:8080/health`. A healthy response is `200 OK` with `{"status":"UP"}`.
+
 ## Database configuration
 
 The defaults match `docker-compose.yml`:
@@ -49,18 +51,32 @@ The defaults match `docker-compose.yml`:
 | Setting | Default |
 | --- | --- |
 | Host | `localhost` |
-| Port | `5432` |
+| Port | `5433` |
 | Database | `employee_management` |
 | Username | `postgres` |
 | Password | `postgres` |
 
-To use different values, copy `.env.example` to `.env` and set the equivalent environment variables in the shell or your IDE run configuration. Spring Boot reads operating-system environment variables; it does not automatically load `.env` files.
+The tracked configuration template is `src/main/resources/application.properties.example`. Before running the application, create the local properties file from this template:
+
+PowerShell:
+
+```powershell
+Copy-Item src/main/resources/application.properties.example src/main/resources/application.properties
+```
+
+Linux/macOS:
+
+```shell
+cp src/main/resources/application.properties.example src/main/resources/application.properties
+```
+
+`src/main/resources/application.properties` is ignored by Git so local settings and credentials are not committed. Edit that local file to configure the database, or override its environment-variable placeholders in the shell or IDE run configuration. Spring Boot reads operating-system environment variables; it does not automatically load `.env` files. `.env.example` is provided for reference, but copy its values into your shell or run configuration as needed.
 
 PowerShell example:
 
 ```powershell
 $env:DB_HOST = "localhost"
-$env:DB_PORT = "5432"
+$env:DB_PORT = "5433"
 $env:DB_NAME = "employee_management"
 $env:DB_USERNAME = "postgres"
 $env:DB_PASSWORD = "your-local-password"
@@ -71,7 +87,7 @@ mvn spring-boot:run
 Linux/macOS example:
 
 ```shell
-export DB_HOST=localhost DB_PORT=5432 DB_NAME=employee_management
+export DB_HOST=localhost DB_PORT=5433 DB_NAME=employee_management
 export DB_USERNAME=postgres DB_PASSWORD=your-local-password SERVER_PORT=8080
 mvn spring-boot:run
 ```
@@ -82,11 +98,11 @@ Never commit real credentials. `.env` is ignored by Git.
 
 ### IntelliJ IDEA
 
-Choose **File → Open**, select the folder containing `pom.xml`, and import it as a Maven project. Set the project SDK and language level to Java 21. Start PostgreSQL, then run `EmployeeManagementApplication` (or use the Maven tool window to run `spring-boot:run`). Set database environment variables in **Run → Edit Configurations** if you changed the defaults.
+Choose **File → Open**, select the folder containing `pom.xml`, and import it as a Maven project. Set the project SDK and language level to Java 25. Start PostgreSQL, then run `EmployeeManagementApplication` (or use the Maven tool window to run `spring-boot:run`). Set database environment variables in **Run → Edit Configurations** if you changed the defaults.
 
 ### Visual Studio Code
 
-Open the repository folder and install the **Extension Pack for Java**. Set `JAVA_HOME` to JDK 21, start PostgreSQL, then use the integrated terminal to run `mvn spring-boot:run`. The Java extension can also run `EmployeeManagementApplication` directly.
+Open the repository folder and install the **Extension Pack for Java**. Set `JAVA_HOME` to JDK 25, start PostgreSQL, then use the integrated terminal to run `mvn spring-boot:run`. The Java extension can also run `EmployeeManagementApplication` directly.
 
 ## API endpoints
 
@@ -94,6 +110,7 @@ Base path: `/api/v1/employees`
 
 | Method | Path | Description | Success |
 | --- | --- | --- | --- |
+| `GET` | `/health` | Check application health | `200 OK` |
 | `POST` | `/api/v1/employees` | Create an employee | `201 Created` |
 | `GET` | `/api/v1/employees` | List employees, with pagination | `200 OK` |
 | `GET` | `/api/v1/employees/{id}` | Get one employee | `200 OK` |
@@ -107,6 +124,14 @@ List query parameters:
 - `status`: `ACTIVE`, `INACTIVE`, or `ON_LEAVE`
 
 Example: `GET /api/v1/employees?search=engineering&status=ACTIVE&page=0&size=10&sort=lastName,asc`
+
+Paging is zero-based. The default page size is `20`, and results are sorted by `lastName` ascending unless another sort is supplied. For example:
+
+```shell
+curl "http://localhost:8080/api/v1/employees?page=1&size=5&sort=lastName,desc"
+```
+
+The response includes `content`, `number` (current page), `size`, `totalElements`, and `totalPages`, along with Spring Data's other page metadata. Use `search` and `status` together with the paging parameters to narrow the results.
 
 ### Create request
 
@@ -179,4 +204,4 @@ src/main/java/com/codenzic/employeemanagement/
   exception/    domain exceptions and global error handling
 ```
 
-Tests cover service behavior and request validation. Run all checks with `mvn clean verify`.
+Tests cover service behavior, all employee routes, health checks, request validation, and paging parameter/response behavior. Run all checks with `mvn clean verify`.

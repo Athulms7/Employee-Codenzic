@@ -4,5 +4,6 @@ target/
 *.iml
 .env
 !.env.example
+src/main/resources/application.properties
 *.log
 .DS_Store
