@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "2ab41824-9876-4f50-a1b2-1f2c3440b220",
     "name": "Employee Management API",
-    "description": "CRUD, pagination, search, and status-filter requests for the Employee Management API.",
+    "description": "CRUD, pagination, search, and status-filter requests for the Employee Management API.\n\nSuccessful responses keep endpoint-specific shapes: employee endpoints return an employee object, list returns a Spring Page object, delete returns 204 with no body, and health returns {\"status\":\"UP\"}. There is no success envelope.\n\nErrors use {\"timestamp\":\"...\",\"status\":400,\"error\":\"Bad Request\",\"message\":\"Request validation failed\",\"path\":\"/api/v1/employees\",\"validationErrors\":{\"email\":\"must be a valid email address\"}}. Invalid fields and query parameters are identified in validationErrors. Invalid enum values list the permitted values. Duplicate email returns 409; a missing employee or endpoint returns 404; unsupported methods return 405 with an Allow header; database unavailability returns 503; other database and unexpected server failures return 500.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -12,15 +12,31 @@
   "item": [
     {
       "name": "Health check",
+      "description": "Expected: 200 OK with {\"status\":\"UP\"}.",
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Health check returns 200', function () { pm.response.to.have.status(200); });",
+          "pm.test('Health response reports UP', function () { pm.expect(pm.response.json().status).to.eql('UP'); });"
+        ] }
+      }],
       "request": { "method": "GET", "url": "{{baseUrl}}/health" }
     },
     {
       "name": "Create employee",
+      "description": "Expected: 201 Created with the created employee object directly (not wrapped in a data/message envelope). The test saves the returned id as employeeId.",
       "event": [{
         "listen": "test",
         "script": { "type": "text/javascript", "exec": [
+          "pm.test('Employee is created', function () { pm.response.to.have.status(201); });",
           "if (pm.response.code === 201) {",
           "  const employee = pm.response.json();",
+          "  pm.test('Response contains an employee object', function () {",
+          "    pm.expect(employee).to.have.property('id');",
+          "    pm.expect(employee.email).to.eql('asha.rao@example.com');",
+          "    pm.expect(employee).to.have.property('createdAt');",
+          "    pm.expect(employee).to.have.property('updatedAt');",
+          "  });",
           "  pm.collectionVariables.set('employeeId', employee.id);",
           "}"
         ] }
@@ -34,22 +50,63 @@
     },
     {
       "name": "List employees",
+      "description": "Expected: 200 OK with Spring Page JSON. The employee array is in content; pagination metadata includes number, size, totalElements, and totalPages.",
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Employee list returns 200', function () { pm.response.to.have.status(200); });",
+          "pm.test('Response contains page content and metadata', function () {",
+          "  const page = pm.response.json();",
+          "  pm.expect(page.content).to.be.an('array');",
+          "  pm.expect(page).to.have.property('number');",
+          "  pm.expect(page).to.have.property('size');",
+          "  pm.expect(page).to.have.property('totalElements');",
+          "  pm.expect(page).to.have.property('totalPages');",
+          "});"
+        ] }
+      }],
       "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/employees?page=0&size=20&sort=lastName,asc" }
     },
     {
       "name": "List second page",
+      "description": "Expected: 200 OK with a Spring Page response. Page numbers are zero-based.",
       "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/employees?page=1&size=5&sort=lastName,desc" }
     },
     {
       "name": "Search active employees",
+      "description": "Expected: 200 OK with a Spring Page response filtered by the case-insensitive search text and ACTIVE status.",
       "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/employees?search=engineering&status=ACTIVE&page=0&size=10" }
     },
     {
       "name": "Get employee by ID",
+      "description": "Expected: 200 OK with the employee object directly. A malformed ID returns 400; an ID that does not exist returns 404 with the standard error body.",
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Employee lookup returns 200', function () { pm.response.to.have.status(200); });",
+          "pm.test('Response contains an employee object', function () {",
+          "  const employee = pm.response.json();",
+          "  pm.expect(employee.id).to.eql(Number(pm.collectionVariables.get('employeeId')));",
+          "  pm.expect(employee).to.have.property('email');",
+          "});"
+        ] }
+      }],
       "request": { "method": "GET", "url": "{{baseUrl}}/api/v1/employees/{{employeeId}}" }
     },
     {
       "name": "Update employee",
+      "description": "Expected: 200 OK with the updated employee object directly. Invalid fields return 400; a missing employee returns 404; an email already used by another employee returns 409.",
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Employee update returns 200', function () { pm.response.to.have.status(200); });",
+          "pm.test('Response contains the updated employee', function () {",
+          "  const employee = pm.response.json();",
+          "  pm.expect(employee.id).to.eql(Number(pm.collectionVariables.get('employeeId')));",
+          "  pm.expect(employee.jobTitle).to.eql('Senior Backend Developer');",
+          "});"
+        ] }
+      }],
       "request": {
         "method": "PUT",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
@@ -59,15 +116,60 @@
     },
     {
       "name": "Delete employee",
+      "description": "Expected: 204 No Content with an empty response body. Deleting an unknown ID returns 404 with the standard error body.",
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Employee delete returns 204 with no body', function () {",
+          "  pm.response.to.have.status(204);",
+          "  pm.expect(pm.response.text()).to.eql('');",
+          "});"
+        ] }
+      }],
       "request": { "method": "DELETE", "url": "{{baseUrl}}/api/v1/employees/{{employeeId}}" }
     },
     {
       "name": "Validation error example",
+      "description": "Expected: 400 Bad Request in the standard ApiError shape. validationErrors identifies each invalid field, for example email: 'must be a valid email address' and salary: 'must be greater than 0'.",
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Invalid employee request returns 400', function () { pm.response.to.have.status(400); });",
+          "pm.test('Validation errors identify invalid fields', function () {",
+          "  const error = pm.response.json();",
+          "  pm.expect(error.status).to.eql(400);",
+          "  pm.expect(error.message).to.eql('Request validation failed');",
+          "  pm.expect(error.validationErrors.email).to.eql('must be a valid email address');",
+          "  pm.expect(error.validationErrors.salary).to.eql('must be greater than 0');",
+          "  pm.expect(error).to.have.property('timestamp');",
+          "  pm.expect(error).to.have.property('path');",
+          "});"
+        ] }
+      }],
       "request": {
         "method": "POST",
         "header": [{ "key": "Content-Type", "value": "application/json" }],
         "body": { "mode": "raw", "raw": "{\n  \"firstName\": \"\",\n  \"lastName\": \"Rao\",\n  \"email\": \"not-an-email\",\n  \"department\": \"Engineering\",\n  \"jobTitle\": \"Developer\",\n  \"salary\": 0,\n  \"status\": \"ACTIVE\"\n}", "options": { "raw": { "language": "json" } } },
         "url": "{{baseUrl}}/api/v1/employees"
+      }
+    },
+    {
+      "name": "Invalid status query example",
+      "description": "Expected: 400 Bad Request with validationErrors.status listing the valid values: ACTIVE, INACTIVE, ON_LEAVE.",
+      "event": [{
+        "listen": "test",
+        "script": { "type": "text/javascript", "exec": [
+          "pm.test('Invalid status query returns 400', function () { pm.response.to.have.status(400); });",
+          "pm.test('Error lists allowed status values', function () {",
+          "  const error = pm.response.json();",
+          "  pm.expect(error.message).to.eql(\"Request parameter 'status' is invalid\");",
+          "  pm.expect(error.validationErrors.status).to.eql('must be one of: ACTIVE, INACTIVE, ON_LEAVE');",
+          "});"
+        ] }
+      }],
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/v1/employees?status=UNKNOWN"
       }
     }
   ]
