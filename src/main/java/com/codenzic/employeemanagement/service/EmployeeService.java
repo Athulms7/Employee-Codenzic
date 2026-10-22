@@ -44,7 +44,7 @@ public class EmployeeService {
     @Transactional(readOnly = true)
     public Page<EmployeeResponse> findAll(String search, EmployeeStatus status, Pageable pageable) {
         validatePageable(pageable);
-        String normalizedSearch = search == null || search.isBlank() ? null : search.trim();
+        String normalizedSearch = search == null || search.isBlank() ? "" : search.trim();
         return repository.search(normalizedSearch, status, pageable).map(mapper::toResponse);
     }
 

@@ -3,6 +3,7 @@ package com.codenzic.employeemanagement.exception;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import com.codenzic.employeemanagement.exception.InvalidRequestException;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
@@ -51,10 +52,17 @@ public class GlobalExceptionHandler {
         return response(HttpStatus.BAD_REQUEST, ex.getMessage(), request, Map.of());
     }
 
+    @ExceptionHandler(DataAccessResourceFailureException.class)
+    public ResponseEntity<ApiError> handleDatabaseUnavailable(DataAccessResourceFailureException ex,
+                                                               HttpServletRequest request) {
+        log.error("Database unavailable handling {} {}", request.getMethod(), request.getRequestURI(), ex);
+        return response(HttpStatus.SERVICE_UNAVAILABLE, "Database is temporarily unavailable", request, Map.of());
+    }
+
     @ExceptionHandler(DataAccessException.class)
     public ResponseEntity<ApiError> handleDatabaseFailure(DataAccessException ex, HttpServletRequest request) {
         log.error("Database operation failed handling {} {}", request.getMethod(), request.getRequestURI(), ex);
-        return response(HttpStatus.SERVICE_UNAVAILABLE, "Database operation failed", request, Map.of());
+        return response(HttpStatus.INTERNAL_SERVER_ERROR, "Database operation failed", request, Map.of());
     }
 
     @ExceptionHandler(Exception.class)

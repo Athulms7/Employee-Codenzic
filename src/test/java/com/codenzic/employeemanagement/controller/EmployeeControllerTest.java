@@ -10,6 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.dao.DataAccessResourceFailureException;
+import org.springframework.dao.InvalidDataAccessResourceUsageException;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -153,5 +155,27 @@ class EmployeeControllerTest {
                 .andExpect(jsonPath("$.message").value("Request validation failed"))
                 .andExpect(jsonPath("$.validationErrors.email").exists());
         verifyNoInteractions(service);
+    }
+
+    @Test
+    void databaseQueryFailureReturnsInternalServerError() throws Exception {
+        var pageable = PageRequest.of(0, 20, Sort.by("lastName"));
+        when(service.findAll(null, null, pageable))
+                .thenThrow(new InvalidDataAccessResourceUsageException("Invalid database query"));
+
+        mvc.perform(get("/api/v1/employees"))
+                .andExpect(status().isInternalServerError())
+                .andExpect(jsonPath("$.message").value("Database operation failed"));
+    }
+
+    @Test
+    void databaseConnectivityFailureReturnsServiceUnavailable() throws Exception {
+        var pageable = PageRequest.of(0, 20, Sort.by("lastName"));
+        when(service.findAll(null, null, pageable))
+                .thenThrow(new DataAccessResourceFailureException("Database is unreachable"));
+
+        mvc.perform(get("/api/v1/employees"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message").value("Database is temporarily unavailable"));
     }
 }

@@ -17,7 +17,7 @@ public interface EmployeeRepository extends JpaRepository<Employee, Long> {
     @Query("""
             select e from Employee e
             where (:status is null or e.status = :status)
-              and (:search is null or lower(e.firstName) like lower(concat('%', :search, '%'))
+              and (:search = '' or lower(e.firstName) like lower(concat('%', :search, '%'))
                    or lower(e.lastName) like lower(concat('%', :search, '%'))
                    or lower(e.email) like lower(concat('%', :search, '%'))
                    or lower(e.department) like lower(concat('%', :search, '%')))
