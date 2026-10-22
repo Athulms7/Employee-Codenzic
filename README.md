@@ -170,7 +170,15 @@ List responses use Spring's standard `Page` shape with `content`, `totalElements
 
 ## Error response
 
-Errors share a stable shape. Validation errors include a `validationErrors` object keyed by field.
+Successful response bodies are endpoint-specific; there is no common message/data envelope:
+
+- `POST /api/v1/employees` returns `201 Created` and the created employee object.
+- `GET /api/v1/employees` returns `200 OK` and a paginated Spring `Page` object with employees in `content`.
+- `GET /api/v1/employees/{id}` and `PUT /api/v1/employees/{id}` return `200 OK` and an employee object.
+- `DELETE /api/v1/employees/{id}` returns `204 No Content` with an empty body.
+- `GET /health` returns `200 OK` with `{"status":"UP"}`.
+
+Errors use a consistent shape; `validationErrors` identifies the invalid field or parameter and explains the expected value.
 
 ```json
 {
@@ -180,16 +188,34 @@ Errors share a stable shape. Validation errors include a `validationErrors` obje
   "message": "Request validation failed",
   "path": "/api/v1/employees",
   "validationErrors": {
-    "email": "must be a well-formed email address"
+    "email": "must be a valid email address",
+    "salary": "must be greater than 0"
   }
 }
 ```
 
-HTTP status mapping: `400` invalid input, `404` employee not found, `409` duplicate email/data conflict, `503` database unavailable, `500` unexpected server error. Internal exception details are written to the application log; they are not returned to API clients.
+For an invalid enum in a request body, the response identifies the field and permitted values:
+
+```json
+{
+  "timestamp": "2026-10-21T12:00:00Z",
+  "status": 400,
+  "error": "Bad Request",
+  "message": "Request body contains an invalid value",
+  "path": "/api/v1/employees",
+  "validationErrors": {
+    "status": "must be one of: ACTIVE, INACTIVE, ON_LEAVE"
+  }
+}
+```
+
+An invalid status query parameter also lists permitted values and identifies `status` as the parameter. Malformed employee IDs identify the `id` parameter. Duplicate email responses return `409 Conflict` and name the conflicting email; unknown employees return `404 Not Found`. An unmapped endpoint returns `404`; an unsupported HTTP method returns `405 Method Not Allowed` with an `Allow` header.
+
+HTTP status mapping: `400` invalid input, `404` employee or endpoint not found, `405` unsupported HTTP method, `409` duplicate email/data conflict, `503` database unavailable, and `500` unexpected or other database operation failure. Internal exception details are written to the application log; they are not returned to API clients.
 
 ## Postman
 
-Import `postman/Employee Management API.postman_collection.json` into Postman. The collection uses `baseUrl` (`http://localhost:8080`) and automatically saves the created employee ID as `employeeId` for the follow-up requests.
+Import [the Postman collection](postman/Employee%20Management%20API.postman_collection.json) into Postman. The collection uses `baseUrl` (`http://localhost:8080`) and automatically saves the created employee ID as `employeeId` for follow-up requests. Request descriptions document expected status codes and response shapes; Postman tests check success responses, pagination metadata, validation details, and allowed status values. Run the requests against a running API and database.
 
 ## Architecture and design notes
 
@@ -198,7 +224,7 @@ Import `postman/Employee Management API.postman_collection.json` into Postman. T
 - **Repository:** uses Spring Data JPA for persistence. The search query combines optional status and case-insensitive substring filters, and PostgreSQL performs the paging and sorting.
 - **DTOs and mapper:** keep the API contract separate from the JPA entity. Request validation runs at the HTTP boundary; the mapper trims values and stores emails in canonical lowercase form.
 - **Entity:** maps employee fields and database constraints. Lifecycle callbacks set timestamps, while enum values are stored as strings so database rows remain readable.
-- **Exception advice:** maps expected failures to consistent 400, 404, and 409 responses. Unexpected failures are logged with the request method and path while the response avoids exposing internal details.
+- **Exception advice:** maps failures to consistent, field-specific 400, 404, 405, and 409 responses; database unavailability returns 503, while other database and unexpected failures return 500. Unexpected failures are logged with the request method and path while the response avoids exposing internal details.
 
 For a walkthrough, trace `POST /api/v1/employees` from `EmployeeController` to `EmployeeService`, `EmployeeMapper`, and `EmployeeRepository`. The same layering applies to reads and updates. `Pageable` carries page, size, and sort into the repository, so the application does not load the full employee table into memory.
 

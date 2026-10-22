@@ -3,7 +3,9 @@ package com.codenzic.employeemanagement.controller;
 import com.codenzic.employeemanagement.dto.EmployeeRequest;
 import com.codenzic.employeemanagement.dto.EmployeeResponse;
 import com.codenzic.employeemanagement.entity.EmployeeStatus;
+import com.codenzic.employeemanagement.exception.DuplicateEmailException;
 import com.codenzic.employeemanagement.exception.GlobalExceptionHandler;
+import com.codenzic.employeemanagement.exception.ResourceNotFoundException;
 import com.codenzic.employeemanagement.service.EmployeeService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -151,7 +153,55 @@ class EmployeeControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("Request validation failed"))
-                .andExpect(jsonPath("$.validationErrors.email").exists());
+                .andExpect(jsonPath("$.validationErrors.email").value("must be a valid email address"))
+                .andExpect(jsonPath("$.validationErrors.salary").value("must be greater than 0"));
         verifyNoInteractions(service);
+    }
+
+    @Test
+    void invalidStatusQueryListsAllowedValues() throws Exception {
+        mvc.perform(get("/api/v1/employees").param("status", "UNKNOWN"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Request parameter 'status' is invalid"))
+                .andExpect(jsonPath("$.validationErrors.status").value("must be one of: ACTIVE, INACTIVE, ON_LEAVE"));
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void invalidStatusInRequestBodyIdentifiesFieldAndAllowedValues() throws Exception {
+        mvc.perform(post("/api/v1/employees")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_REQUEST.replace("\"ACTIVE\"", "\"UNKNOWN\"")))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Request body contains an invalid value"))
+                .andExpect(jsonPath("$.validationErrors.status")
+                        .value("must be one of: ACTIVE, INACTIVE, ON_LEAVE"));
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void duplicateEmailReturnsConflictWithSpecificMessage() throws Exception {
+        when(service.create(any(EmployeeRequest.class)))
+                .thenThrow(new DuplicateEmailException("asha@example.com"));
+
+        mvc.perform(post("/api/v1/employees")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(VALID_REQUEST))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409))
+                .andExpect(jsonPath("$.message")
+                        .value("An employee with email 'asha@example.com' already exists"));
+    }
+
+    @Test
+    void missingEmployeeReturnsNotFoundWithSpecificMessage() throws Exception {
+        when(service.findById(8L))
+                .thenThrow(new ResourceNotFoundException("Employee with id 8 was not found"));
+
+        mvc.perform(get("/api/v1/employees/8"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.message").value("Employee with id 8 was not found"));
+        verify(service).findById(8L);
     }
 }
